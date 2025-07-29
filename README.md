@@ -24,15 +24,13 @@ This project evaluates the robustness of speech translation models under noisy c
   - `conda` for managing the environment 
   - `pip` if you're using a virtualenv-based setup
   - CUDA 12.x installed if using GPU acceleration (for torch + cu128 build)
+
+- Please refer to the document for installing ffmpeg with your pytorch version: https://github.com/pytorch/torchcodec?tab=readme-ov-file#installing-torchcodec
  
 ```bash
 conda install ffmpeg
-
 pip install torchcodec
 ```
-
-- Please refer to the document for installing ffmpeg with your pytorch version: https://github.com/pytorch/torchcodec?tab=readme-ov-file#installing-torchcodec
-
 ---
 
 ### Option 1: Using Conda
