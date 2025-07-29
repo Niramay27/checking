@@ -1,10 +1,10 @@
-# Supplementary README
+# NOPE-HYPE
 
-This document walks you through data preparation, model fine‑tuning, and evaluation up to the generation of per‑checkpoint metrics.
+This project evaluates the robustness of speech translation models under noisy conditions using audio augmentation (Gaussian and SNR-based).
 
 ---
 
-## 1. Dataset
+## Dataset
 
 - **Dataset paper & download:**  
   <https://dl.acm.org/doi/pdf/10.1145/3736720>  
@@ -12,104 +12,96 @@ This document walks you through data preparation, model fine‑tuning, and evalu
 
 ---
 
-## 2. Data Preparation
+## How to Run
 
-All commands assume you are in the project root.
+### 1. Environment Setup
 
-1. **Split & align audio with transcripts**  
-   ```bash
-   python data.py
-   # Reads:  ds/train/txt/train.yaml, train.en, train.hi
-   # Writes: jsonl files/train.jsonl
-   ```
+### Prerequisites
 
-2. **Convert to manifest format**  
-   ```bash
-   python prepare_dataset.py
-   # Input:  jsonl files/train.jsonl
-   # Output: jsonl files/train_manifest.jsonl
-   ```
-
-3. **Sample 200 h and 2 h subsets**  
-   ```bash
-   python sample.py
-   # Inputs:  jsonl files/train_manifest.jsonl
-   # Outputs: jsonl files/200_hours.jsonl
-   #          jsonl files/2_hours.jsonl
-   ```
+- Python 3.11 recommended
+- For best compatibility, use [Anaconda](https://www.anaconda.com/) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html)
+- Recommended tools:
+  - `conda` for managing the environment 
+  - `pip` if you're using a virtualenv-based setup
+  - CUDA 12.x installed if using GPU acceleration (for torch + cu128 build)
 
 ---
 
-## 3. Data Augmentation
+### Option 1: Using Conda
 
-### 3.1 Gaussian Noise on 200 h  
+> Best for GPU compatibility, `mkl-service`, and system-wide dependencies
+
 ```bash
-python 200_add_noise.py
-# Applies Gaussian noise with var ∈ {0.001, 0.005, 0.01, 0.05}
-# Produces:
-#   jsonl files/0.001_audio.jsonl   + folder ./0.001_audio/
-#   jsonl files/0.005_audio.jsonl   + folder ./0.005_audio/
-#   jsonl files/0.01_audio.jsonl    + folder ./0.01_audio/
-#   jsonl files/0.05_audio.jsonl    + folder ./0.05_audio/
+# Create and activate environment with a compatible Python version
+conda create -n myenv python=3.11
+conda activate myenv
+
+# Install dependencies (edit this path if needed)
+pip install -r requirements.txt
 ```
 
-### 3.2 Gaussian Noise on 2 h  
+### Option 2: Using Virtualenv (pip only)
+
 ```bash
-python 2_add_gauss.py
-# Same noise levels on the 2-hour subset:
-#   jsonl files/2_0.001_audio.jsonl  + folder ./2_0.001_audio/
-#   … etc.
+python3.10 -m venv env
+source env/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-### 3.3 SNR‐based Noise on 2 h  
+
+### 2. Run the Full Pipeline
+
+Make the script executable and run it:
+
 ```bash
-python 2_add_snr.py
-# SNR ∈ {10, 15, 25} dB
-#   jsonl files/snr10_noisy_output.jsonl + folder ./noisy_audio_10dB/
-#   jsonl files/snr15_noisy_output.jsonl + folder ./noisy_audio_15dB/
-#   jsonl files/snr25_noisy_output.jsonl + folder ./noisy_audio_25dB/
+chmod +x run.sh
+./run.sh
 ```
 
-> The 2 h noisy variants serve as **evaluation sets** for robustness testing.
+This will sequentially run:
+
+1. `prepare_data.py` – Prepares JSONL metadata.
+2. `augment_audio.py` – Adds noise to audio.
+3. `model.py` – Trains the SeamlessM4t model.
+4. `model_eval.py` – Evaluates model performance.
 
 ---
 
-## 4. Model Fine‑tuning
+### 3. Audio Augmentation
 
-Fine‑tune SeamlessM4T on the 200 h clean dataset:
+- **200-hour set**: Only 20% is augmented with Gaussian noise (variance provided via CLI).
+- **2-hour set**: Fully augmented using:
+  - Gaussian noise with var : 0.001, 0.005, 0.01, 0.05 
+  - SNR levels: 10 dB, 15 dB, 25 dB
 
-```bash
-python seamless_finetune.py
+Noisy audio is saved in folders like:
+
 ```
-
-- Checkpoints saved under `seamless_m4t_finetuned/checkpoint-*`.
+0.005_audio/       # Gaussian noise with var=0.005
+10dB_audio/        # SNR-based noisy files
+```
 
 ---
 
-## 5. Evaluation
+### 4. Evaluation
 
-Evaluate each checkpoint on **all 8** JSONL variants:
+Metrics computed:
 
-```bash
-python seamless_evaluation.py 
-```
+- **BLEU** (`sacrebleu`)
+- **WER** and **CHRF** (`evaluate`, `jiwer`)
+- **BERTSCORE** and **COMET** (optional, if installed)
 
-This produces per‑checkpoint, per‑dataset metrics (logged to terminal and saved as JSONL):
-
-- **BLEU**  
-- **WER**  
-- **chrF**  
-- **BERTScore**  
-- **COMET**  
-
+Evaluation results and trained models are saved automatically.
 
 ---
 
-## 6. Example: Two-Variance Robustness Calculation
+## 5. Example: Robustness Calculation
 
 We demonstrate the t-test and RA workflow for **two training variances**: `0.0` (clean) vs. `0.05`.
 
-### 6.1 Logged Evaluation Metrics
+### 5.1 Logged Evaluation Metrics
 
 | train_var | noise_rate | BLEU  | WER    | chrF   | BERTScore | COMET  |
 |-----------|------------|-------|--------|--------|-----------|--------|
@@ -122,7 +114,7 @@ We demonstrate the t-test and RA workflow for **two training variances**: `0.0` 
 |           | 15         | 47.52 | 0.4859 | 68.67  | 0.9656    | 0.7715 |
 |           | 25         | 51.14 | 0.4414 | 70.18  | 0.9671    | 0.7808 |
 
-### 6.2 Pairwise t-Test on BLEU
+### 5.2 Pairwise t-Test on BLEU
 
 ```python
 import numpy as np
@@ -149,20 +141,17 @@ p_value = 2 * t.sf(abs(t_stat), df)
 print(f"t-statistic = {t_stat:.3f}")
 print(f"degrees of freedom = {df:.2f}")
 print(f"p-value = {p_value:.3f}")
-# Expected output:
-# t-statistic = -2.929
-# p-value = 0.036
 ```
 
 *Result:*  
 - **t-statistic:** -2.929  
 - **p-value:** 0.036  
 
-The same test can be compared across wer and chrF metrices. This will give us a table for p value. 
+Run the same code for scores across wer and chrF. This will give us a table for p value. 
 
 *Continue with RA and robustness scoring as described in Section 5.*  
 
-### 📊 Metric Summary: Mean and Standard Deviation
+### 5.3 Metric Summary: Mean and Standard Deviation
 
 To compare model performance across different training noise levels, we compute the **mean** and **standard deviation (std)** for five evaluation metrics—**BLEU**, **WER**, **CHRF**, **BERTScore**, and **COMET**—over four test-time noise settings: `No Noise`, `SNR=10`, `SNR=15`, and `SNR=25`.
 
@@ -173,26 +162,22 @@ These statistics help quantify both average performance and consistency across v
 | 0.0                | 58.6775     | 6.0923     | 0.4150     | 0.1012    | 75.0775      | 4.1613      | 0.9212            | 0.0132           | 0.7733        | 0.0186       |
 | 0.05               | 48.5150     | 3.3243     | 0.4914     | 0.0679    | 69.1025      | 1.6220      | 0.9660            | 0.0016           | 0.7746        | 0.0100       |
 
-### 🧾 Note
+###  Note
 - These summary statistics form the basis for further robustness analysis using **Risk-Adjusted (RA) Scores** and **Significance Penalty** methods.
 
-### 📉 Risk–Adjusted (RA) Scores under SNR Stress
+### 5.4 Risk–Adjusted (RA) Scores under SNR Stress
 
 To robustly evaluate model performance under noisy test conditions, we compute the **Risk–Adjusted (RA) Score**, which combines the average metric value with its variability across noise levels.
 
-#### 🔧 RA Score Formula
+#### RA Score Formula
 
 For a metric \( m \) under training noise variance \( v \), the RA score is:
 
-\[
-\text{RA}_{m}(v) = \frac{\mu_{m}(v)}{1 + \text{CV}_{m}(v)}
-\quad \text{where} \quad 
-\text{CV}_{m}(v) = \frac{\sigma_{m}(v)}{\mu_{m}(v)}
-\]
+<pre> Risk-adjusted Score (RA): RAₘ(v) = μₘ(v) / [1 + CVₘ(v)] where CVₘ(v) = σₘ(v) / μₘ(v) </pre>
 
 This penalizes metrics with high variability, emphasizing **both performance and stability** under noise.
 
-#### ✅ Final RA Scores (SNR-based Evaluation)
+#### Final RA Scores (SNR-based Evaluation)
 
 | Training Gaussian Var | BLEU RA | WER RA  | CHRF RA |
 |-----------------------|---------|---------|----------|
@@ -201,27 +186,23 @@ This penalizes metrics with high variability, emphasizing **both performance and
 
 - **Higher RA score** implies better performance and robustness across noise levels.
 
-### 📉 Significance Penalty and Rejection Rate
+### 5.5 Significance Penalty and Rejection Rate
 
 To quantify the statistical reliability of model performance under noisy conditions, we incorporate a **Significance Penalty** based on hypothesis testing.
 
-#### 🔁 Rejection Rate
+#### Rejection Rate
 
 The **rejection rate** \( r_s(v) \) for each stress type \( s \in \{\text{SNR}, \text{GVAR}\} \) and training variance \( v \) is computed as:
 
-\[
-r_s(v) = \frac{\#\{p < 0.05\}}{\# \text{comparisons}}
-\]
+<pre> rₛ(v) = # {p < 0.05} / # comparisons </pre>
 
 This reflects the proportion of pairwise t-tests that reject the null hypothesis, i.e., identify statistically significant differences in performance under noise. A high rejection rate indicates instability.
 
-#### 🚫 Significance Penalty Score
+#### Significance Penalty Score
 
 The **significance penalty score** \( P(v) \) combines the rejection rates from both stress suites:
 
-\[
-P(v) = 1 - 0.5 \cdot r_{\text{SNR}}(v) - 0.5 \cdot r_{\text{GVAR}}(v)
-\]
+<pre> P(v) = 1 - 0.5 · r_SNR(v) - 0.5 · r_GVAR(v) </pre>
 
 | Training Gaussian Var | Penalty |
 |-----------------------|---------|
@@ -231,47 +212,32 @@ P(v) = 1 - 0.5 \cdot r_{\text{SNR}}(v) - 0.5 \cdot r_{\text{GVAR}}(v)
 - A value of **1** means no statistically significant differences were detected — the model is stable under noise.
 - A value **closer to 0** indicates frequent significant variations — the model is less robust.
 
-> **Note:** The full significance penalty could not yet be computed as we currently lack complete t-test statistics across all metrics. Once available, this section will be updated with exact \( r_s(v) \) and \( P(v) \) values for each configuration.
+> **Note:** The full significance penalty could not yet be computed as we currently lack complete t-test statistics across all metrics. Once available, this section will be updated with exact r_s(v) and P(v) values for each configuration.
 
-### 🛡️ Robustness Score
+### 5.6 Robustness Score
 
 To holistically evaluate the model's stability and performance under noisy conditions, we compute the **Robustness Score** for each metric. This combines the **risk-adjusted score** and the **significance penalty**.
 
-#### 🧮 Formula
+#### Formula
 
 For each metric \( m \in \{\text{BLEU}, \text{WER}, \text{CHRF}\} \), the robustness score under a given training noise variance \( v \) is computed as:
 
-\[
-R_m(v) = RA_{m,\text{avg}}(v) \cdot P(v)
-\]
+<pre> Rₘ(v) = RAₘ,avg(v) · P(v) </pre> 
 
 Where:
 
-\[
-RA_{m,\text{avg}}(v) = \frac{1}{2} \left(RA_{m,\text{SNR}}(v) + RA_{m,\text{GVAR}}(v)\right)
-\]
+<pre> RAₘ,avg(v) = (1/2) · [RAₘ,SNR(v) + RAₘ,GVAR(v)] </pre>
 
-- \( RA_{m,\text{SNR}}(v) \), \( RA_{m,\text{GVAR}}(v) \): Risk-adjusted scores for SNR and GVAR stress types.
+- <pre> RAₘ,SNR(v), RAₘ,GVAR(v) </pre>: Risk-adjusted scores for SNR and GVAR stress types.
 - \( P(v) \): Significance penalty.
-
-> For this study, we use \( P(v) = 1 \) as a placeholder since the full rejection rates are not available yet. Final scores can be updated accordingly once \( P(v) \) is computed.
 
 ---
 
-#### ✅ Robustness Score Results
+#### Robustness Score Results
 
 | Training Variance | BLEU Robustness | WER Robustness | CHRF Robustness |
 |-------------------|------------------|----------------|------------------|
 | 0.00              | 0.61297          | 0.58601        | 0.70260          |
 | 0.05              | 0.66342          | 0.66731        | 0.80190          |
 
-These values indicate that adding a small amount of training noise (\( v = 0.05 \)) improves the model’s robustness across all three metrics — BLEU, WER, and CHRF — under the assumption of maximal significance penalty \( P(v) = 1 \).
-
-
-
-
-
-
-
-
-
+These values indicate that adding a small amount of training noise \( v = 0.05 \) improves the model’s robustness across all three metrics — BLEU, WER, and CHRF.

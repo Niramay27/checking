@@ -17,6 +17,8 @@ import logging
 from dataclasses import dataclass
 from typing import Dict, List, Union, Any
 from tqdm import tqdm
+import argparse
+
 # Configure logging to output to both console and a file
 logging.basicConfig(
     level=logging.INFO,
@@ -31,11 +33,27 @@ logger = logging.getLogger(__name__)
 transformers_logger = logging.getLogger("transformers")
 transformers_logger.setLevel(logging.ERROR)
 
+parser = argparse.ArgumentParser(description="Train SeamlessM4T model")
+
+parser.add_argument(
+    "--train_data_path",
+    type=str,
+    default="./jsonl files/200_hours.jsonl",
+    help="Path to training dataset JSONL file"
+)
+parser.add_argument(
+    "--eval_data_path",
+    type=str,
+    default="./jsonl files/2_hours.jsonl",
+    help="Path to evaluation dataset JSONL file"
+)
+args = parser.parse_args()
+
 
 # Constants - Optimized for 350 hours dataset
 MODEL_ID = "facebook/hf-seamless-m4t-medium"
-TRAIN_DATA_PATH = './jsonl files/200_hours.jsonl'  # Path to training data
-EVAL_DATA_PATH = './jsonl files/2_hours.jsonl'  # Path to evaluation data
+TRAIN_DATA_PATH = args.train_data_path
+EVAL_DATA_PATH = args.eval_data_path 
 OUTPUT_DIR = "./seamless_m4t_finetuned"
 BATCH_SIZE = 8  # Adjusted based on your previous results
 LEARNING_RATE = 3e-5  # Slightly lower initial learning rate

@@ -6,6 +6,8 @@ from transformers import AutoProcessor, SeamlessM4TModel
 import evaluate
 import jiwer
 from tqdm import tqdm
+import csv
+from datetime import datetime
 
 # === CONFIG ===
 checkpoint_dir = "./seamless_m4t_finetuned"
@@ -22,6 +24,20 @@ jsonl_files = [
 
 base_jsonl_path = "./jsonl files"
 output_dir = "./evaluation_results"
+
+# Prepare global CSV
+csv_summary_path = os.path.join(output_dir, "full_evaluation_summary.csv")
+write_header = not os.path.exists(csv_summary_path)
+
+csv_summary_fields = [
+    "jsonl_file", "checkpoint", "total_samples", "successful_samples", "failed_samples",
+    "BLEU", "CHRF", "BERT-F1", "COMET", "WER"
+]
+csv_rows = []
+
+# Optional: text log file
+log_file_path = os.path.join(output_dir, f"evaluation_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
+
 
 # Loop through each input JSONL file
 for jsonl_file in jsonl_files:
@@ -186,6 +202,38 @@ for jsonl_file in jsonl_files:
             for res in evaluation_results:
                 out_f.write(json.dumps(res, ensure_ascii=False) + "\n")
 
+            # Add to CSV rows
+            csv_rows.append({
+                "jsonl_file": jsonl_file,
+                "checkpoint": os.path.basename(ckp),
+                "total_samples": len(data),
+                "successful_samples": len(predictions),
+                "failed_samples": len(data) - len(predictions),
+                "BLEU": bleu_score,
+                "CHRF": chrf_score,
+                "BERT-F1": bert_f1,
+                "COMET": comet_score,
+                "WER": wer_score
+            })
+
+            # Append to human-readable log file
+            with open(log_file_path, "a", encoding="utf-8") as log_file:
+                log_file.write(f"Evaluation: {jsonl_file} | Checkpoint: {os.path.basename(ckp)}\n")
+                log_file.write(f"  Total Samples: {len(data)}\n")
+                log_file.write(f"  Successful:    {len(predictions)}\n")
+                log_file.write(f"  Failed:        {len(data) - len(predictions)}\n")
+                log_file.write(f"  BLEU   : {bleu_score:.2f}\n")
+                log_file.write(f"  CHRF   : {chrf_score:.2f}\n")
+                log_file.write(f"  BERT-F1: {bert_f1:.4f}\n")
+                log_file.write(f"  COMET  : {comet_score:.4f}\n")
+                log_file.write(f"  WER    : {wer_score:.4f}\n")
+                log_file.write("="*60 + "\n")
+
         torch.cuda.empty_cache()
 
-
+# Write all CSV rows at once
+with open(csv_summary_path, "a", newline='', encoding="utf-8") as csvfile:
+    writer = csv.DictWriter(csvfile, fieldnames=csv_summary_fields)
+    if write_header:
+        writer.writeheader()
+    writer.writerows(csv_rows)
