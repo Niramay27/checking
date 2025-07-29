@@ -33,18 +33,23 @@ def read_audio_paths_from_yaml(yaml_file_path: str) -> Dict[str, str]:
 
 def create_jsonl_from_text_and_yaml(offset_duration_file: str, en_file: str, hi_file: str,
                                     yaml_file_path: str, output_dir: str, jsonl_output_file: str):
+    
+    BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+    eng_file = os.path.join(BASE_DIR, en_file)
+    hin_file = os.path.join(BASE_DIR, hi_file)
+    os.makedirs(os.path.dirname(jsonl_output_file), exist_ok=True)
+
     with open(offset_duration_file, 'r') as f:
         offset_duration_data = yaml.safe_load(f)
-    with open(en_file, 'r', encoding='utf-8') as f:
+    with open(eng_file, 'r', encoding='utf-8') as f:
         english_sentences = f.readlines()
-    with open(hi_file, 'r', encoding='utf-8') as f:
+    with open(hin_file, 'r', encoding='utf-8') as f:
         hindi_translations = f.readlines()
 
     audio_paths = read_audio_paths_from_yaml(yaml_file_path)
     os.makedirs(output_dir, exist_ok=True)
 
     with open(jsonl_output_file, 'w', encoding='utf-8') as jsonl_file:
-        BASE_DIR = os.path.dirname(os.path.dirname(__file__))
         for i, entry in enumerate(offset_duration_data):
             duration = entry['duration']
             offset = entry['offset']
@@ -54,7 +59,7 @@ def create_jsonl_from_text_and_yaml(offset_duration_file: str, en_file: str, hi_
             audio_file_path = audio_paths.get(speaker_id)
 
             if audio_file_path:
-                full_path = os.path.join(BASE_DIR , "/ds/train/wav/", audio_file_path)
+                full_path = os.path.join(BASE_DIR , "ds","train","wav", audio_file_path)
                 split_audio_path = split_audio(full_path, offset, duration, output_dir, f"{speaker_id}_{i}")
                 jsonl_entry = {
                     "sentence": english_sentence,
@@ -180,12 +185,12 @@ if __name__ == "__main__":
     # STEP 1: Create JSONL
     BASE_DIR = os.path.dirname(os.path.dirname(__file__))
     create_jsonl_from_text_and_yaml(
-        offset_duration_file = os.path.join(BASE_DIR, "ds/train/txt/train.yaml"),
-        en_file= os.path.join(BASE_DIR,'/ds/train/txt/train.en'),
-        hi_file= os.path.join(BASE_DIR,'/ds/train/txt/train.hi'),
-        yaml_file_path= os.path.join(BASE_DIR,'/ds/train/txt/train.yaml'),
-        output_dir= os.path.join(BASE_DIR,'./chunked_audio'),
-        jsonl_output_file='./jsonl files/train.jsonl'
+        offset_duration_file = os.path.join(BASE_DIR, "ds","train","txt","train.yaml"),
+        en_file= os.path.join(BASE_DIR,"ds","train","txt","train.en"),
+        hi_file= os.path.join(BASE_DIR,"ds","train","txt","train.hi"),
+        yaml_file_path= os.path.join(BASE_DIR,"ds","train","txt","train.yaml"),
+        output_dir= os.path.join(BASE_DIR,'chunked_audio'),
+        jsonl_output_file=os.path.join(BASE_DIR, "jsonl files", "train.jsonl")
     )
 
     # STEP 2: Create Manifest
